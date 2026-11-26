@@ -1,0 +1,47 @@
+name: Build & Package
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Unit Tests
+        run: swift test
+
+      - name: Build Release App Bundles
+        env:
+          BUILD_CONFIG: release
+          SKIP_BRIDGE_BUILD: "1"
+        run: ./script/package_all.sh
+
+      - name: Verify Ad-hoc Code Signatures
+        run: |
+          codesign --verify --deep --strict dist/APKInMacOS.app
+          codesign --verify --deep --strict dist/EXEInMacOS.app
+
+      - name: Archive Release ZIPs
+        run: |
+          mkdir -p dist/release
+          ditto -c -k --sequesterRsrc --keepParent dist/APKInMacOS.app dist/release/APKInMacOS-arm64.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/EXEInMacOS.app dist/release/EXEInMacOS-arm64.zip
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-apps
+          path: dist/release/*.zip
+
+      - name: Create GitHub Release on Tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/release/*.zip
