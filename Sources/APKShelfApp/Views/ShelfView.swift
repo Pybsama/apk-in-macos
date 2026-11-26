@@ -202,13 +202,10 @@ struct ShelfView: View {
                 sdkGuideCard(sdkErr)
             } else {
                 VStack(spacing: 14) {
-                    AndroidMascotIcon(
-                        tint: IvoryTheme.sage,
-                        eyeColor: IvoryTheme.paper
-                    )
-                    .frame(width: 34, height: 34)
-                    .frame(width: 62, height: 62)
-                    .background(IvoryTheme.sage.opacity(0.11), in: Circle())
+                    AndroidMascotIcon(tint: IvoryTheme.warmGold)
+                        .frame(width: 32, height: 32)
+                        .frame(width: 62, height: 62)
+                        .background(IvoryTheme.warmGoldSoft, in: Circle())
 
                     VStack(spacing: 5) {
                         Text(tr("拖入 APK 直接运行", "Drop an APK to run it"))
@@ -349,10 +346,9 @@ struct ShelfView: View {
     }
 }
 
-/// Minimalist Android robot silhouette matching the warm-parchment shelf aesthetic.
+/// Minimalist line-art Android robot head matching the light stroke weight of EXEShelfView.
 private struct AndroidMascotIcon: View {
     let tint: Color
-    let eyeColor: Color
 
     var body: some View {
         Canvas { ctx, size in
@@ -366,66 +362,51 @@ private struct AndroidMascotIcon: View {
                 CGRect(x: ox + x * s, y: oy + y * s, width: w * s, height: h * s)
             }
 
+            let baseY: CGFloat = 74.0
+            let domeR: CGFloat = 35.0
+            let cornerR: CGFloat = 4.5
+            let cornerDX: CGFloat = 30.166
+            let alphaDeg: Double = 8.485
+            let stroke = StrokeStyle(lineWidth: 5.8 * s, lineCap: .round, lineJoin: .round)
+
             // Antennae
             var antennae = Path()
-            antennae.move(to: pt(39, 20))
-            antennae.addLine(to: pt(31, 9))
-            antennae.move(to: pt(61, 20))
-            antennae.addLine(to: pt(69, 9))
-            ctx.stroke(
-                antennae,
-                with: .color(tint),
-                style: StrokeStyle(lineWidth: 4.6 * s, lineCap: .round)
-            )
+            antennae.move(to: pt(31.45, 44.32))
+            antennae.addLine(to: pt(22.44, 29.90))
+            antennae.move(to: pt(68.55, 44.32))
+            antennae.addLine(to: pt(77.56, 29.90))
+            ctx.stroke(antennae, with: .color(tint), style: stroke)
 
-            // Semicircle head dome
+            // Tangent-rounded Android dome outline
             var head = Path()
+            head.move(to: pt(50.0 - cornerDX, baseY))
             head.addArc(
-                center: pt(50, 38),
-                radius: 21.5 * s,
-                startAngle: .degrees(180),
-                endAngle: .degrees(0),
+                center: pt(50.0 - cornerDX, baseY - cornerR),
+                radius: cornerR * s,
+                startAngle: .degrees(90),
+                endAngle: .degrees(180 - alphaDeg),
+                clockwise: false
+            )
+            head.addArc(
+                center: pt(50.0, baseY),
+                radius: domeR * s,
+                startAngle: .degrees(180 - alphaDeg),
+                endAngle: .degrees(alphaDeg),
+                clockwise: false
+            )
+            head.addArc(
+                center: pt(50.0 + cornerDX, baseY - cornerR),
+                radius: cornerR * s,
+                startAngle: .degrees(alphaDeg),
+                endAngle: .degrees(90),
                 clockwise: false
             )
             head.closeSubpath()
-            ctx.fill(head, with: .color(tint))
+            ctx.stroke(head, with: .color(tint), style: stroke)
 
-            // Torso (sharp top corners, rounded bottom corners)
-            let torsoRect = rect(28.5, 41, 43, 35)
-            let torso = Path(
-                roundedRect: torsoRect,
-                cornerRadii: RectangleCornerRadii(
-                    topLeading: 2.0 * s,
-                    bottomLeading: 7.0 * s,
-                    bottomTrailing: 7.0 * s,
-                    topTrailing: 2.0 * s
-                )
-            )
-            ctx.fill(torso, with: .color(tint))
-
-            // Left & right arms
-            ctx.fill(
-                Path(roundedRect: rect(16.5, 41.5, 8.5, 25), cornerRadius: 4.25 * s),
-                with: .color(tint)
-            )
-            ctx.fill(
-                Path(roundedRect: rect(75.0, 41.5, 8.5, 25), cornerRadius: 4.25 * s),
-                with: .color(tint)
-            )
-
-            // Left & right legs
-            ctx.fill(
-                Path(roundedRect: rect(37.5, 71, 9.0, 18), cornerRadius: 4.5 * s),
-                with: .color(tint)
-            )
-            ctx.fill(
-                Path(roundedRect: rect(53.5, 71, 9.0, 18), cornerRadius: 4.5 * s),
-                with: .color(tint)
-            )
-
-            // Eye cutouts
-            ctx.fill(Path(ellipseIn: rect(41.2 - 2.6, 28.5 - 2.6, 5.2, 5.2)), with: .color(eyeColor))
-            ctx.fill(Path(ellipseIn: rect(58.8 - 2.6, 28.5 - 2.6, 5.2, 5.2)), with: .color(eyeColor))
+            // Eyes
+            ctx.fill(Path(ellipseIn: rect(36.5 - 3.8, 58.5 - 3.8, 7.6, 7.6)), with: .color(tint))
+            ctx.fill(Path(ellipseIn: rect(63.5 - 3.8, 58.5 - 3.8, 7.6, 7.6)), with: .color(tint))
         }
         .accessibilityHidden(true)
     }

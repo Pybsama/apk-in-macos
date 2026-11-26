@@ -68,25 +68,25 @@ for y in range(h):
         if 112 < dist <= 120:
             r, g, b = 224, 214, 196
 
-        # Minimalist layered sage-green & warm-espresso Android robot emblem
-        # Back muted botanical sage green rounded tile (#4E825E)
+        # Minimalist layered warm-terracotta & warm-espresso Android robot head emblem
+        # Back warm terracotta-sienna rounded square (#C46D48, matching EXEInMacOS)
         bx, by = 568, 444
-        bdx = max(abs(x - bx) - 135, 0)
-        bdy = max(abs(y - by) - 155, 0)
+        bdx = max(abs(x - bx) - 145, 0)
+        bdy = max(abs(y - by) - 145, 0)
         if math.hypot(bdx, bdy) <= 44:
-            r, g, b = 78, 130, 94
+            r, g, b = 196, 109, 72
 
-        # Front warm-espresso rounded app window (#2C2722)
+        # Front warm-espresso rounded square (#2C2722, matching EXEInMacOS)
         fx, fy = 456, 560
-        fdx = max(abs(x - fx) - 145, 0)
-        fdy = max(abs(y - fy) - 165, 0)
+        fdx = max(abs(x - fx) - 155, 0)
+        fdy = max(abs(y - fy) - 155, 0)
         if math.hypot(fdx, fdy) <= 46:
             r, g, b = 44, 39, 34
 
-            # Normalized 0..100 Android robot silhouette inside front window
-            scale = 2.18
-            nx = (x - fx) / scale + 50.0
-            ny = (y - fy) / scale + 50.0
+            # Centered minimalist Android robot head (dome + antennae, with terracotta eyes)
+            # Dome baseline at (fx, fy + 48) so overall head+antennae centers cleanly in the card.
+            rx = x - fx
+            ry = y - (fy + 48)
 
             def dist_seg(px, py, x1, y1, x2, y2):
                 vx, vy = x2 - x1, y2 - y1
@@ -96,40 +96,27 @@ for y in range(h):
                 t = max(0.0, min(1.0, ((px - x1) * vx + (py - y1) * vy) / l2))
                 return math.hypot(px - (x1 + t * vx), py - (y1 + t * vy))
 
-            def in_capsule(px, py, x1, y1, x2, y2, rad):
-                return dist_seg(px, py, x1, y1, x2, y2) <= rad
+            in_antenna = (
+                dist_seg(rx, ry, -36.0, -64.0, -62.0, -108.0) <= 8.5
+                or dist_seg(rx, ry, 36.0, -64.0, 62.0, -108.0) <= 8.5
+            )
 
-            in_robot = False
-            # Antennae
-            if in_capsule(nx, ny, 39.0, 20.0, 31.0, 9.0, 2.3) or in_capsule(nx, ny, 61.0, 20.0, 69.0, 9.0, 2.3):
-                in_robot = True
-            # Semicircle head dome (center 50, 38, radius 21.5)
-            elif ny <= 38.0 and math.hypot(nx - 50.0, ny - 38.0) <= 21.5:
-                in_robot = True
-            # Torso (x: 28.5..71.5, y: 41..76, rounded bottom corners r=7, top r=2)
-            elif 28.5 <= nx <= 71.5 and 41.0 <= ny <= 76.0:
-                in_top = True
-                if ny < 43.0 and nx < 30.5:
-                    in_top = math.hypot(nx - 30.5, ny - 43.0) <= 2.0
-                elif ny < 43.0 and nx > 69.5:
-                    in_top = math.hypot(nx - 69.5, ny - 43.0) <= 2.0
-                in_bot = True
-                if ny > 69.0 and nx < 35.5:
-                    in_bot = math.hypot(nx - 35.5, ny - 69.0) <= 7.0
-                elif ny > 69.0 and nx > 64.5:
-                    in_bot = math.hypot(nx - 64.5, ny - 69.0) <= 7.0
-                in_robot = in_top and in_bot
-            # Arms
-            elif in_capsule(nx, ny, 20.75, 45.75, 20.75, 62.25, 4.25) or in_capsule(nx, ny, 79.25, 45.75, 79.25, 62.25, 4.25):
-                in_robot = True
-            # Legs
-            elif in_capsule(nx, ny, 42.0, 75.5, 42.0, 84.5, 4.5) or in_capsule(nx, ny, 58.0, 75.5, 58.0, 84.5, 4.5):
-                in_robot = True
+            # Semicircle dome (R=84) with flat bottom & tangent rounded bottom corners (cr=10)
+            in_dome = False
+            if ry <= 0.0 and math.hypot(rx, ry) <= 84.0:
+                if abs(rx) > 73.3212 and ry > -10.0:
+                    in_dome = math.hypot(abs(rx) - 73.3212, ry + 10.0) <= 10.0
+                else:
+                    in_dome = True
 
-            if in_robot:
-                in_eye = (math.hypot(nx - 41.2, ny - 28.5) <= 2.6) or (math.hypot(nx - 58.8, ny - 28.5) <= 2.6)
-                if not in_eye:
-                    # Crisp cream-ivory silhouette (#FAF7F0)
+            if in_antenna or in_dome:
+                in_eye = (
+                    math.hypot(rx + 34.0, ry + 36.0) <= 12.5
+                    or math.hypot(rx - 34.0, ry + 36.0) <= 12.5
+                )
+                if in_eye:
+                    r, g, b = 196, 109, 72
+                else:
                     r, g, b = 250, 247, 240
 
         row.extend([max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)), 255])
