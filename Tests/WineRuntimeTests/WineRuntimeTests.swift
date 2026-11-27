@@ -326,6 +326,54 @@ import WineRuntime
     #expect(FileManager.default.fileExists(atPath: staged.executablePath))
 }
 
+@Test func wineEngineWrapsNWJSAppWithEmptyPackageNameWithoutMutatingSource() throws {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.appendingPathComponent("nwjs-wrap-\(UUID().uuidString)", isDirectory: true)
+    defer { try? fm.removeItem(at: root) }
+
+    let emptyGame = root.appendingPathComponent("EmptyNameGame", isDirectory: true)
+    let wwwDir = emptyGame.appendingPathComponent("www", isDirectory: true)
+    try fm.createDirectory(at: wwwDir, withIntermediateDirectories: true)
+    let origPkg = #"{"name": "", "main": "www/index.html", "window": {"title": "", "width": 816, "height": 624}}"#
+    try origPkg.write(to: emptyGame.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+
+    let wrappersRoot = root.appendingPathComponent("wrappers", isDirectory: true)
+    let profilesRoot = root.appendingPathComponent("profiles", isDirectory: true)
+    let prepared = WineEngine.prepareNWJSLaunchDirectory(
+        workDir: emptyGame,
+        appID: "demo-rpg-1234",
+        appName: "Demo RPG",
+        wrappersRoot: wrappersRoot,
+        profilesRoot: profilesRoot
+    )
+
+    #expect(prepared.nwappDir != emptyGame)
+    #expect(fm.fileExists(atPath: prepared.nwappDir.appendingPathComponent("www").path))
+    #expect(fm.fileExists(atPath: prepared.profileDir.path))
+    let patchedData = try Data(contentsOf: prepared.nwappDir.appendingPathComponent("package.json"))
+    let patchedJSON = try #require(JSONSerialization.jsonObject(with: patchedData) as? [String: Any])
+    #expect(patchedJSON["name"] as? String == "demo-rpg-1234")
+    #expect((patchedJSON["window"] as? [String: Any])?["title"] as? String == "Demo RPG")
+    // Source package.json must remain untouched
+    let untouched = try String(contentsOf: emptyGame.appendingPathComponent("package.json"), encoding: .utf8)
+    #expect(untouched == origPkg)
+
+    // A game with a valid non-empty name launches directly without a wrapper
+    let validGame = root.appendingPathComponent("ValidNameGame", isDirectory: true)
+    try fm.createDirectory(at: validGame, withIntermediateDirectories: true)
+    try #"{"name": "my-valid-game", "main": "index.html"}"#
+        .write(to: validGame.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
+    let direct = WineEngine.prepareNWJSLaunchDirectory(
+        workDir: validGame,
+        appID: "valid-5678",
+        appName: "Valid Game",
+        wrappersRoot: wrappersRoot,
+        profilesRoot: profilesRoot
+    )
+    #expect(direct.nwappDir == validGame)
+    #expect(fm.fileExists(atPath: direct.profileDir.path))
+}
+
 // MARK: - Synthetic PE & VS_VERSIONINFO Builders
 
 private func makeSyntheticPE64(machine: UInt16, subsystem: UInt16) -> Data {

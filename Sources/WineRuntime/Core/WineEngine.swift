@@ -35,6 +35,8 @@ public actor WineEngine {
     nonisolated public let dataRoot: URL
     nonisolated public let runtimeDir: URL
     nonisolated public let nwjsDir: URL
+    nonisolated public let nwjsProfilesDir: URL
+    nonisolated public let nwjsWrappersDir: URL
     nonisolated public let prefixDir: URL
     nonisolated public let driveCDir: URL
     nonisolated public let shelfAppsDir: URL
@@ -53,6 +55,8 @@ public actor WineEngine {
         self.dataRoot = base
         self.runtimeDir = base.appendingPathComponent("runtime", isDirectory: true)
         self.nwjsDir = base.appendingPathComponent("nwjs-arm64", isDirectory: true)
+        self.nwjsProfilesDir = base.appendingPathComponent("nwjs-profiles", isDirectory: true)
+        self.nwjsWrappersDir = base.appendingPathComponent("nwjs-wrappers", isDirectory: true)
         self.prefixDir = base.appendingPathComponent("prefix", isDirectory: true)
         self.driveCDir = prefixDir.appendingPathComponent("drive_c", isDirectory: true)
         self.shelfAppsDir = driveCDir.appendingPathComponent("ShelfApps", isDirectory: true)
@@ -548,8 +552,18 @@ public actor WineEngine {
                 try? logHandle?.close()
                 throw WineRuntimeError.nwjsNotFound
             }
+            let prepared = Self.prepareNWJSLaunchDirectory(
+                workDir: workDir,
+                appID: item.id,
+                appName: item.appName,
+                wrappersRoot: nwjsWrappersDir,
+                profilesRoot: nwjsProfilesDir
+            )
             proc.executableURL = URL(fileURLWithPath: nwjsBin)
-            proc.arguments = ["--nwapp=\(workDir.path)"] + item.arguments
+            proc.arguments = [
+                "--user-data-dir=\(prepared.profileDir.path)",
+                "--nwapp=\(prepared.nwappDir.path)"
+            ] + item.arguments
             proc.currentDirectoryURL = workDir
 
         case .wine:
@@ -601,6 +615,61 @@ public actor WineEngine {
         let pid = proc.processIdentifier
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
             NSRunningApplication(processIdentifier: pid)?.activate()
+        }
+    }
+
+    /// Prepares a launch directory and isolated user-data-dir for native Apple Silicon NW.js.
+    /// Legacy RPG Maker MV/MZ games often ship `package.json` with `"name": ""`, which NW.js 0.90+
+    /// rejects with an error dialog. When `"name"` is missing or empty, creates a lightweight
+    /// symlink wrapper with a sanitized `package.json` without mutating the user's game folder.
+    public static func prepareNWJSLaunchDirectory(
+        workDir: URL,
+        appID: String,
+        appName: String,
+        wrappersRoot: URL,
+        profilesRoot: URL
+    ) -> (nwappDir: URL, profileDir: URL) {
+        let fm = FileManager.default
+        let safeID = appID.isEmpty ? "nwjs-app" : appID
+        let profileDir = profilesRoot.appendingPathComponent(safeID, isDirectory: true)
+        try? fm.createDirectory(at: profileDir, withIntermediateDirectories: true)
+
+        let pkgURL = workDir.appendingPathComponent("package.json")
+        guard let rawData = try? Data(contentsOf: pkgURL),
+              var json = (try? JSONSerialization.jsonObject(with: rawData)) as? [String: Any] else {
+            return (workDir, profileDir)
+        }
+
+        let rawName = (json["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let nameIsValid = !rawName.isEmpty && !rawName.contains("/") && !rawName.contains("..")
+        if nameIsValid {
+            return (workDir, profileDir)
+        }
+
+        let wrapperDir = wrappersRoot.appendingPathComponent(safeID, isDirectory: true)
+        try? fm.removeItem(at: wrapperDir)
+        do {
+            try fm.createDirectory(at: wrapperDir, withIntermediateDirectories: true)
+            let entries = try fm.contentsOfDirectory(at: workDir, includingPropertiesForKeys: nil)
+            for entry in entries {
+                if entry.lastPathComponent.lowercased() == "package.json" { continue }
+                let linkURL = wrapperDir.appendingPathComponent(entry.lastPathComponent)
+                try? fm.createSymbolicLink(at: linkURL, withDestinationURL: entry)
+            }
+
+            json["name"] = safeID
+            if var windowObj = json["window"] as? [String: Any] {
+                let title = (windowObj["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if title.isEmpty && !appName.isEmpty {
+                    windowObj["title"] = appName
+                    json["window"] = windowObj
+                }
+            }
+            let patchedData = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+            try patchedData.write(to: wrapperDir.appendingPathComponent("package.json"), options: .atomic)
+            return (wrapperDir, profileDir)
+        } catch {
+            return (workDir, profileDir)
         }
     }
 
